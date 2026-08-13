@@ -61,7 +61,7 @@ export default function Home(){
 
     {page==='Dashboard' && <section className="content">
       <div className="hero">
-        <div><span className="eyebrow"><Sparkles size={14}/> YOUR STUDY COMMAND CENTRE</span><h1>Study smarter.<br/><em>Score better.</em></h1><p>Track your CBSE Class 10 journey, revise on time, and keep every resource in one place.</p><div className="heroBtns"><button className="primary" onClick={()=>nav('Syllabus')}>Continue studying <ChevronRight size={17}/></button><a className="softBtn" href="https://www.youtube.com/@SunilBhaiya" target="_blank" rel="noreferrer"><PlayCircle size={17}/> Sunil Sir lectures</a></div></div><ProgressRing value={percent}/></div>
+        <div><span className="eyebrow"><Sparkles size={14}/> YOUR STUDY COMMAND CENTRE</span><h1>Study smarter.<br/><em>Score better.</em></h1><p>Track your CBSE Class 10 journey, revise on time, and keep every resource in one place.</p><div className="heroBtns"><button className="primary" onClick={()=>nav('Syllabus')}>Continue studying <ChevronRight size={17}/></button><a className="softBtn" href="https://www.youtube.com/@SunilBhaiya-Science" target="_blank" rel="noreferrer"><PlayCircle size={17}/> Sunil Sir lectures</a></div></div><ProgressRing value={percent}/></div>
       <div className="stats">
        {[['Overall progress',percent+'%',Target],['Chapters done',completed+'/'+total,CheckCircle2],['Study streak','7 days',Flame],['Revision due','3',Clock3]].map(([t,v,I]:any)=><div className="stat" key={t}><div className="statIcon"><I size={18}/></div><div><span>{t}</span><b>{v}</b></div></div>)}
       </div>
