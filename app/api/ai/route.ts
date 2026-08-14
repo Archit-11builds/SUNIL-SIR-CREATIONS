@@ -11,7 +11,7 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           error:
-            'Auren Intelligence is not connected yet. Add GEMINI_API_KEY in .env.local or Vercel Env.',
+            'Auren Intelligence is not connected yet. Add GEMINI_API_KEY in .env.local or Vercel Environment Variables.',
         },
         { status: 503 },
       );
@@ -80,7 +80,10 @@ ${JSON.stringify(context)}`;
 
     return NextResponse.json(
       {
-          error: error instanceof Error ? error.message : String(error),
+        error:
+          error instanceof Error
+            ? error.message
+            : 'Auren Intelligence could not respond right now.',
       },
       { status: 500 },
     );
