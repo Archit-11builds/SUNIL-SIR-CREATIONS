@@ -21,6 +21,7 @@ type Exam = { id: string; subject: string; date: string };
 type Chapter = { id: string; name: string; note: string };
 type Subject = { id: string; name: string; icon: string; chapters: Chapter[] };
 type Viewer = { title: string; url: string; description?: string };
+type LocalAccount = { id: string; name: string; className: string; createdAt: string };
 
 type ResourceType = 'NCERT' | 'Syllabus' | 'Sample Papers' | 'PYQs' | 'Question Bank' | 'Marking Scheme' | 'Model Answers' | 'E-Resources';
 
@@ -137,6 +138,9 @@ export default function Home() {
   const [loginOpen, setLoginOpen] = useState(false);
   const [timerOpen, setTimerOpen] = useState(false);
   const [brandTransition, setBrandTransition] = useState(false);
+  const [postBrandShlok, setPostBrandShlok] = useState(false);
+  const [postBrandCoda, setPostBrandCoda] = useState(false);
+  const [brandPhase, setBrandPhase] = useState<'auren' | 'archit' | 'exit'>('auren');
   const [timerSeconds, setTimerSeconds] = useState(25 * 60);
   const [timerRunning, setTimerRunning] = useState(false);
   const [timerMode, setTimerMode] = useState<'focus' | 'break'>('focus');
@@ -148,9 +152,12 @@ export default function Home() {
   const [friendName, setFriendName] = useState('');
   const [friendXp, setFriendXp] = useState('500');
   const [userList, setUserList] = useState<string[]>([]);
+  const [accounts, setAccounts] = useState<LocalAccount[]>([]);
   const [dailyMinutes, setDailyMinutes] = useState(90);
   const [activity, setActivity] = useState<string[]>([]);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [navTransition, setNavTransition] = useState(false);
+  const [navTransitionLabel, setNavTransitionLabel] = useState('');
   const [goalDone, setGoalDone] = useState(0);
   const [lastSession, setLastSession] = useState('');
   const [aiPrompt, setAiPrompt] = useState('');
@@ -181,6 +188,9 @@ export default function Home() {
   const [focusSessions, setFocusSessions] = useState(0);
   const [boardScore, setBoardScore] = useState(0);
   const [lastCloudSync, setLastCloudSync] = useState('');
+  const [focusMode, setFocusMode] = useState(false);
+  const [briefDismissed, setBriefDismissed] = useState(false);
+  const [commandPulse, setCommandPulse] = useState(false);
 
   useEffect(() => {
     const n = localStorage.getItem('ac_name');
@@ -188,6 +198,8 @@ export default function Home() {
     setStatus(safeRead('ac_status', {})); setChapterSteps(safeRead('ac_chapter_steps', {})); setNotes(safeRead('ac_notes', {})); setExams(safeRead('ac_exams', []));
     setPlanned(safeRead('ac_planned', [])); setCompleted(safeRead('ac_completed', []));
     setDark(localStorage.getItem('ac_dark') === '1'); setUserList(safeRead('ac_users', []));
+    const storedAccounts = safeRead<LocalAccount[]>('ac_accounts', []);
+    if (storedAccounts.length) setAccounts(storedAccounts);
     setDailyMinutes(Number(localStorage.getItem('ac_daily_minutes') || 90));
     setActivity(safeRead('ac_activity', []));
     setGoalDone(Number(localStorage.getItem('ac_goal_done') || 0));
@@ -210,6 +222,7 @@ export default function Home() {
   useEffect(() => { localStorage.setItem('ac_completed', JSON.stringify(completed)); }, [completed]);
   useEffect(() => { localStorage.setItem('ac_dark', dark ? '1' : '0'); }, [dark]);
   useEffect(() => { localStorage.setItem('ac_daily_minutes', String(dailyMinutes)); }, [dailyMinutes]);
+  useEffect(() => { localStorage.setItem('ac_accounts', JSON.stringify(accounts)); }, [accounts]);
   useEffect(() => { localStorage.setItem('ac_activity', JSON.stringify(activity)); }, [activity]);
   useEffect(() => { localStorage.setItem('ac_goal_done', String(goalDone)); }, [goalDone]);
   useEffect(() => { if (lastSession) localStorage.setItem('ac_last_session', lastSession); }, [lastSession]);
@@ -227,7 +240,8 @@ export default function Home() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); setPaletteOpen(v => !v); }
-      if (e.key === 'Escape') { setPaletteOpen(false); setViewer(null); }
+      if (e.key.toLowerCase() === 'f' && !['INPUT','TEXTAREA','SELECT'].includes((e.target as HTMLElement)?.tagName || '')) { e.preventDefault(); setFocusMode(true); }
+      if (e.key === 'Escape') { setPaletteOpen(false); setViewer(null); setFocusMode(false); setTimerOpen(false); }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -278,8 +292,34 @@ export default function Home() {
   const cycle = (id: string) => { setStatus(s => ({ ...s, [id]: !s[id] || s[id] === 'todo' ? 'progress' : s[id] === 'progress' ? 'done' : 'todo' })); if (!activity.includes(todayDate)) setActivity(a => [...a, todayDate]); };
   const save = () => {
     if (!name.trim()) return notify('Enter your name first');
-    localStorage.setItem('ac_name', name.trim()); localStorage.setItem('ac_class', className);
-    const users = Array.from(new Set([...userList, name.trim()])); setUserList(users); localStorage.setItem('ac_users', JSON.stringify(users)); setOnboard(false);
+    const clean = name.trim();
+    localStorage.setItem('ac_name', clean); localStorage.setItem('ac_class', className);
+    const users = Array.from(new Set([...userList, clean])); setUserList(users); localStorage.setItem('ac_users', JSON.stringify(users));
+    setAccounts(list => {
+      const existing = list.find(a => a.name.toLowerCase() === clean.toLowerCase());
+      if (existing) return list.map(a => a.id === existing.id ? { ...a, name: clean, className } : a);
+      return [...list, { id: `${Date.now()}-${Math.random().toString(36).slice(2,7)}`, name: clean, className, createdAt: new Date().toISOString() }];
+    });
+    setOnboard(false);
+    notify(`Welcome to AUREN, ${clean}`);
+  };
+  const switchAccount = (account: LocalAccount) => {
+    setName(account.name); setClassName(account.className);
+    localStorage.setItem('ac_name', account.name); localStorage.setItem('ac_class', account.className);
+    setLoginOpen(false); setOnboard(false); setPage('dashboard');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    notify(`Switched to ${account.name}`);
+  };
+  const addAccount = () => {
+    setLoginOpen(false); setName(''); setClassName('10'); setOnboard(true);
+  };
+  const deleteCurrentAccount = () => {
+    const current = accounts.find(a => a.name.toLowerCase() === name.trim().toLowerCase() && a.className === className);
+    const next = accounts.filter(a => a.id !== current?.id && a.name.toLowerCase() !== name.trim().toLowerCase());
+    setAccounts(next); localStorage.setItem('ac_accounts', JSON.stringify(next));
+    setName(''); setClassName('10'); localStorage.removeItem('ac_name'); localStorage.removeItem('ac_class');
+    setLoginOpen(false); setOnboard(true);
+    notify('Current profile deleted from this device');
   };
   const go = (p: string) => {
     setPage(p);
@@ -289,16 +329,35 @@ export default function Home() {
     requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: 'auto' }));
   };
   const openBrand = () => {
-    if (brandTransition) return;
+    if (brandTransition || postBrandShlok || postBrandCoda) return;
+    setPostBrandShlok(false);
+    setPostBrandCoda(false);
+    setBrandPhase('auren');
     setBrandTransition(true);
+
+    // Slow, readable cinematic sequence: the green bloom expands first,
+    // then the creator credit remains on screen long enough to read.
     window.setTimeout(() => {
       setPage('home');
       setSelected(null);
       setChapter(null);
       setMobile(false);
+      setBrandPhase('exit');
       window.scrollTo({ top: 0, behavior: 'auto' });
-    }, 470);
-    window.setTimeout(() => setBrandTransition(false), 900);
+    }, 3400);
+
+    window.setTimeout(() => {
+      setBrandTransition(false);
+      setBrandPhase('auren');
+      setPostBrandShlok(true);
+    }, 3900);
+
+    // The shlok gets its own calm reading moment, followed by a short AUREN creed.
+    window.setTimeout(() => {
+      setPostBrandShlok(false);
+      setPostBrandCoda(true);
+    }, 7900);
+    window.setTimeout(() => setPostBrandCoda(false), 11200);
   };
   const openChapter = (s: Subject, c: Chapter) => { setSelected(s); setChapter(c); setPage('subject'); window.scrollTo(0, 0); };
 
@@ -373,6 +432,17 @@ export default function Home() {
 
   const todayPlan = plan.filter(x => x.date === todayDate);
   const next = todayPlan[0] || plan.find(x => x.date > todayDate);
+  const unfinishedPlanned = subjects.flatMap(s => s.chapters.filter(c => planned.includes(c.id) && !chapterComplete(c)).map(c => ({ subject:s.name, chapter:c.name, id:c.id })));
+  const priorityPreview = next || unfinishedPlanned[0];
+  const readinessLabel = boardScoreCalc >= 85 ? 'Exam ready' : boardScoreCalc >= 65 ? 'Building momentum' : boardScoreCalc >= 40 ? 'Needs consistency' : 'Start your run';
+  const dailyMantras = [
+    'Consistency compounds.',
+    'Understand first. Memorise last.',
+    'One focused hour beats three distracted ones.',
+    'Small wins become board confidence.',
+    'Revise what you forget, not what you already know.'
+  ];
+  const dailyMantra = dailyMantras[new Date(`${todayDate}T00:00:00`).getDay() % dailyMantras.length];
   const markPlan = (x: typeof plan[number]) => {
     const k = `${x.date}|${x.subject}|${x.chapter}`;
     setCompleted(p => p.includes(k) ? p.filter(a => a !== k) : [...p, k]);
@@ -384,6 +454,7 @@ export default function Home() {
   const timerLabel = `${String(Math.floor(timerSeconds / 60)).padStart(2, '0')}:${String(timerSeconds % 60).padStart(2, '0')}`;
   const resetTimer = () => { setTimerRunning(false); setTimerSeconds(timerMode === 'focus' ? 25 * 60 : 5 * 60); };
   const switchTimerMode = (mode: 'focus' | 'break') => { setTimerMode(mode); setTimerRunning(false); setTimerSeconds(mode === 'focus' ? 25 * 60 : 5 * 60); };
+  const startFocusMode = () => { setFocusMode(true); setTimerOpen(false); setTimerMode('focus'); setTimerSeconds(v => v > 0 && v < 25*60 ? v : 25*60); setTimerRunning(true); setCommandPulse(true); window.setTimeout(() => setCommandPulse(false), 900); };
 
   const resourceCards = (s: Subject, c: Chapter) => (['NCERT','Syllabus','Sample Papers','PYQs','Question Bank','Marking Scheme','Model Answers','E-Resources'] as ResourceType[]).map(type => {
     const doc = getResource(s.name, c.name, type);
@@ -407,7 +478,15 @@ export default function Home() {
   const importBackup = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f=e.target.files?.[0]; if(!f) return; const r=new FileReader(); r.onload=()=>{ try { const d=JSON.parse(String(r.result||'{}')); if(d.status) setStatus(d.status); if(d.notes) setNotes(d.notes); if(d.exams) setExams(d.exams); if(d.planned) setPlanned(d.planned); if(d.completed) setCompleted(d.completed); if(d.dailyMinutes) setDailyMinutes(d.dailyMinutes); if(d.activity) setActivity(d.activity); if(typeof d.goalDone==='number') setGoalDone(d.goalDone); if(d.mistakes) setMistakes(d.mistakes); if(d.studyMinutes) setStudyMinutes(d.studyMinutes); if(typeof d.streakFreeze==='number') setStreakFreeze(d.streakFreeze); if(d.rooms) setRooms(d.rooms); if(typeof d.focusSessions==='number') setFocusSessions(d.focusSessions); if(d.name){setName(d.name);localStorage.setItem('ac_name',d.name)}; notify('Backup restored successfully'); } catch { notify('That backup file is not valid'); } }; r.readAsText(f);
   };
-  const quickAction = (p:string) => { setPaletteOpen(false); go(p); };
+  const quickAction = (p:string) => {
+    if (navTransition || p === page) { setPaletteOpen(false); return; }
+    const label = p === 'ai' ? 'Auren Intelligence' : String(nav.find(x => x[0] === p)?.[1] || 'Dashboard');
+    setPaletteOpen(false);
+    setNavTransitionLabel(label);
+    setNavTransition(true);
+    window.setTimeout(() => go(p), 360);
+    window.setTimeout(() => setNavTransition(false), 900);
+  };
   const addMistake = () => {
     if (!chapter) return notify('Open a chapter first');
     const question = window.prompt('What question did you get wrong?');
@@ -457,7 +536,7 @@ export default function Home() {
       <div className="brandFilmGrid" aria-hidden="true"></div>
 
       <header className="brandExpTop">
-        <div className="brandExpSerial"><span></span> AC / 01 — THE STUDY HOUSE</div>
+        <div className="brandExpSerial"><span></span> AUREN / 01</div>
         <div className="brandExpMeta">CLASS {className} <i>·</i> {todayDate}</div>
       </header>
 
@@ -465,9 +544,9 @@ export default function Home() {
         <div className="brandExpHeroCopy">
           <div className="brandExpEyebrow"><span>AUREN</span><b>EST. 2026</b></div>
           <h1>Study<br/><em>with intent.</em></h1>
-          <p>Not another dashboard. A focused study house built around one idea: understand deeply, practise deliberately, and arrive at your boards ready.</p>
+          <p>Not another dashboard. A focused study experience built around one idea: understand deeply, practise deliberately, and arrive at your boards ready.</p>
           <div className="brandExpActions">
-            <button type="button" className="brandExpMain" onClick={()=>go('dashboard')}>Enter the study house <ArrowUpRight size={18}/></button>
+            <button type="button" className="brandExpMain" onClick={()=>go('dashboard')}>Enter AUREN <ArrowUpRight size={18}/></button>
             <button type="button" className="brandExpLink" onClick={()=>setPaletteOpen(true)}><span>⌘</span> Explore everything</button>
           </div>
         </div>
@@ -478,7 +557,7 @@ export default function Home() {
           <div className="emblemTick tickOne"></div><div className="emblemTick tickTwo"></div>
           <div className="emblemDisc">
             <div className="emblemA">A<span>✦</span></div>
-            <strong>AUREN</strong><small>STUDY HOUSE</small>
+            <strong>AUREN</strong>
             <div className="emblemRule"></div><span className="emblemEdition">BOARD JOURNEY / 2026</span>
           </div>
           <div className="emblemOrbitLabel labelTop">01 / FOCUS</div>
@@ -519,15 +598,16 @@ export default function Home() {
         <div className="finalMark"><span>A</span><i>✦</i></div>
       </section>
 
-      <footer className="brandExpFooter"><span>DESIGNED WITH <em>♥</em></span><span>AUREN / BOARD JOURNEY</span><span>CLASS {className}</span></footer>
+      <footer className="brandExpFooter"><span>DESIGNED WITH ❤️ BY ARCHIT</span><span>AUREN / BOARD JOURNEY</span><span>CLASS {className}</span></footer>
     </section>
   </>;
 
 
 
   const Dashboard = () => <>
-    <header className="top"><div><small>YOUR BOARD JOURNEY</small><h1>Good evening, {name || 'Student'} 👋</h1><p>Your exam plan, resources and progress in one place.</p></div><button type="button" onClick={() => setDark(!dark)}>{dark ? <Star/> : <Moon/>}</button></header>
-    <section className="hero"><div><span>CLASS {className} STUDY COMMAND CENTRE</span><h2>Study smarter.<br/><i>Finish stronger.</i></h2><p>Understand the concept, revise the important points, practise NCERT and finish with board-style questions.</p><button type="button" className="primary" onClick={() => go('datesheet')}>Build my study plan <ChevronRight/></button></div><div className="ring"><b>{prog}%</b><small>complete</small></div></section>
+    <header className="top"><div><small>YOUR BOARD JOURNEY · AUREN BRIEFING</small><h1>Good evening, {name || 'Student'} 👋</h1><p>Your next best move, progress and exam pressure — without the noise.</p></div><div className="topActions"><button type="button" className="briefPill" onClick={startFocusMode}><Zap size={15}/> Focus mode <kbd>F</kbd></button><button type="button" onClick={() => setDark(!dark)}>{dark ? <Star/> : <Moon/>}</button></div></header>
+    <section className="hero"><div><span>CLASS {className} STUDY COMMAND CENTRE</span><h2>Study smarter.<br/><i>Finish stronger.</i></h2><p>Understand the concept, revise the important points, practise NCERT and finish with board-style questions.</p><div className="heroActions"><button type="button" className="primary" onClick={() => go('datesheet')}>Build my study plan <ChevronRight/></button><button type="button" className="heroGhost" onClick={startFocusMode}><Zap size={16}/> Enter focus mode</button></div></div><div className="ring"><b>{prog}%</b><small>complete</small><span>{readinessLabel}</span></div></section>
+    {!briefDismissed && <section className={`dailyBrief ${commandPulse ? 'pulse' : ''}`}><div className="briefGlow"></div><div className="briefLead"><small>01 · TODAY'S AUREN BRIEF</small><h2>{priorityPreview ? 'Your next move is clear.' : 'Your command centre is ready.'}</h2><p>{priorityPreview ? <>Start with <b>{priorityPreview.chapter}</b>{' '}<span>·</span>{' '}{priorityPreview.subject}. Avoid opening five chapters at once.</> : 'Add an exam and select a few chapters. Auren will turn them into a focused daily route.'}</p><div className="briefQuote">“{dailyMantra}”</div></div><div className="briefMetrics"><div><span>READINESS</span><b>{boardScoreCalc}</b><small>/100 · {readinessLabel}</small></div><div><span>STREAK</span><b>{streak}</b><small>active days</small></div><div><span>FOCUS</span><b>{focusSessions}</b><small>sessions logged</small></div></div><div className="briefActions"><button type="button" className="primary" onClick={() => priorityPreview ? go('study') : go('datesheet')}>{priorityPreview ? 'Open my priority' : 'Build my route'} <ChevronRight/></button><button type="button" className="briefClose" onClick={() => setBriefDismissed(true)} aria-label="Dismiss brief"><X size={15}/></button></div></section>}
     <div className="stats"><div><Flame/><b>{Math.max(1, Math.floor(done / 3) + 1)}</b><small>day streak</small></div><div><Zap/><b>{xp}</b><small>XP earned</small></div><div><BookOpen/><b>{done}</b><small>chapters done</small></div><div><Trophy/><b>Level {Math.floor(xp / 500) + 1}</b><small>current level</small></div></div>
     <section className="commandGrid">
       <div className="commandCard goalCard"><div className="commandIcon"><Target/></div><div className="commandMain"><div className="commandTop"><div><small>TODAY'S STUDY GOAL</small><h3>{goalDone}/{dailyMinutes} minutes</h3></div><b>{goalPercent}%</b></div><div className="goalBar"><i style={{width:`${goalPercent}%`}}/></div><div className="goalControls"><button type="button" onClick={()=>setDailyMinutes(v=>Math.max(30,v-15))}>−15</button><button type="button" onClick={()=>setDailyMinutes(v=>v+15)}>+15</button><button type="button" className="miniPrimary" onClick={()=>setTimerOpen(true)}><Clock3/> Focus</button></div></div></div>
@@ -751,10 +831,34 @@ export default function Home() {
   const Content = () => page === 'home' ? BrandHome() : page === 'dashboard' ? Dashboard() : page === 'syllabus' ? Syllabus() : page === 'subject' ? SubjectPage() : page === 'datesheet' ? DateSheet() : page === 'study' ? Study() : page === 'notes' ? Notes() : page === 'revision' ? Revision() : page === 'quiz' ? QuizArena() : page === 'mistakes' ? MistakeBook() : page === 'analytics' ? Analytics() : page === 'leaderboard' ? Leaderboard() : page === 'rewards' ? Rewards() : page === 'heatmap' ? Heatmap() : page === 'resources' ? ResourceLibrary() : page === 'rooms' ? StudyRooms() : page === 'ai' ? AIPage() : page === 'settings' ? SettingsPage() : Feedback();
 
   return <main className={`${dark ? 'app dark' : 'app'} ${compactMode ? 'compactMode' : ''}`}>
-    {onboard && <div className="overlay"><div className="welcome"><div className="devotionalMark" aria-label="Mahakal"><span>ॐ</span><b>MAHAKAL</b></div><h2>AUREN</h2><h1>Let's build your <i>board journey.</i></h1><p>Enter your name and class to personalise your tracker.</p><input value={name} onChange={e => setName(e.target.value)} placeholder="Your name"/><div className="classes">{['9','10'].map(c => <button type="button" className={className === c ? 'selected' : ''} onClick={() => setClassName(c)} key={c}>Class {c}</button>)}</div><button type="button" className="primary full" onClick={save}>Let's begin <ChevronRight/></button><small>DESIGNED WITH ♥<br/>BUILT FOR YOUR BOARD JOURNEY</small></div></div>}
+    {onboard && <div className="onboardStage">
+  <div className="onboardAtmosphere" aria-hidden="true"><i></i><b></b><span></span></div>
+  <div className="onboardWindow">
+    <div className="onboardTopline"><span><em></em> AUREN / PRIVATE</span><small>01 — SETUP</small></div>
+    <div className="onboardGrid">
+      <div className="onboardStory">
+        <div className="onboardMonogram"><span>A</span><b>✦</b></div>
+        <small className="onboardKicker">YOUR BOARD JOURNEY</small>
+        <h1>Study with <i>intent.</i></h1>
+        <p>AUREN turns your syllabus, exams and daily effort into one calm command centre.</p>
+        <div className="onboardPromise"><span>01</span><div><b>Built around you</b><small>Your name and class personalise the experience.</small></div></div>
+        <div className="onboardPromise"><span>02</span><div><b>Built for consistency</b><small>Small, focused sessions compound into board readiness.</small></div></div>
+      </div>
+      <div className="onboardFormPane">
+        <div className="onboardFormHead"><span>WELCOME</span><b>Let's set your profile.</b><small>It takes less than a minute.</small></div>
+        <label className="onboardField"><span>Your name</span><div className="onboardInputWrap"><UserRoundPlus size={17}/><input autoFocus value={name} onChange={e => setName(e.target.value)} placeholder="Enter your name" /></div></label>
+        <div className="onboardField"><span>Your class</span><div className="onboardClassGrid">{['9','10'].map(c => <button type="button" className={className === c ? 'selected' : ''} onClick={() => setClassName(c)} key={c}><b>CLASS</b><strong>{c}</strong><small>{c === '10' ? 'Board year' : 'Foundation'}</small>{className === c && <Check size={15}/>}</button>)}</div></div>
+        <div className="onboardPreview"><div className="onboardPreviewAvatar">{(name.trim()[0] || 'A').toUpperCase()}</div><div><small>YOUR AUREN PROFILE</small><b>{name.trim() || 'Your name'}</b><span>Class {className} · Board Journey</span></div><Sparkles size={17}/></div>
+        <button type="button" className="onboardLaunch" onClick={save}><span>Enter AUREN</span><ArrowUpRight size={18}/></button>
+        <div className="onboardFine"><span>⌘</span> Your profile is stored on this device <i></i> <span>PRIVATE</span></div>
+      </div>
+    </div>
+    <div className="onboardFooter"><span>DESIGNED WITH ❤️ BY ARCHIT</span><span>AUREN / 2026</span></div>
+  </div>
+</div>}
     <section className="main commandMain"><header className="commandHeader">
       <button type="button" className="commandBrand brandButton" onClick={openBrand} aria-label="Open AUREN home">
-        <b className="brandMark">A<span>✦</span></b><span className="commandBrandText">AUREN<br/>STUDY HOUSE</span>
+        <b className="brandMark">A<span>✦</span></b><span className="commandBrandText">AUREN</span>
       </button>
       <div className="commandCurrent"><small>NOW EXPLORING</small><b>{String(page === 'ai' ? 'Auren Intelligence' : nav.find(x => x[0] === page)?.[1] || 'Dashboard')}</b></div>
       <div className="commandActions">
@@ -763,20 +867,41 @@ export default function Home() {
         <button type="button" className="commandTimer" onClick={() => setTimerOpen(true)} aria-label="Focus timer"><Clock3 size={17}/></button>
         <button type="button" className="commandProfile" onClick={() => setLoginOpen(true)} aria-label="Open profile"><User size={17}/></button>
       </div>
-    </header><div className="content"><div className="pageTransition">{Content()}</div></div><footer><div className="footerBrand"><span className="devotionalMark small"><span>ॐ</span><b>MAHAKAL</b></span><span>DESIGNED WITH <em>♥</em></span></div><div>BUILT FOR YOUR BOARD JOURNEY</div></footer></section>
+    </header><div className="content"><div className="pageTransition">{Content()}</div></div><footer><div className="footerBrand"><span className="devotionalMark small"><span>ॐ</span><b>MAHAKAL</b></span><span>DESIGNED WITH ❤️ BY ARCHIT</span></div><div>DESIGNED FOR FOCUS · BUILT FOR YOUR BOARD JOURNEY</div></footer></section>
 
-    {brandTransition && <div className="brandTransition" aria-hidden="true">
+    {navTransition && <div className="navRouteTransition" aria-hidden="true"><div className="navRouteGlow"></div><div className="navRouteLine"></div><div className="navRouteCore"><span>AUREN / NAVIGATION</span><strong>{navTransitionLabel}</strong><small>Entering your study space</small></div></div>}
+
+    {brandTransition && <div className={`brandTransition brandPhase-${brandPhase}`} aria-hidden="true">
       <div className="brandBloom"></div>
-      <div className="brandTransitionCore"><b>A<span>✦</span></b><strong>AUREN</strong><small>BOARD JOURNEY</small></div>
+      <div className="brandCreditCore"><span>DESIGNED WITH</span><strong>♥ BY ARCHIT</strong></div>
     </div>}
+
+    {postBrandShlok && <div className="postBrandShlok" aria-hidden="true">
+      <div className="postBrandShlokCard">
+        <span className="postBrandEyebrow">AUREN · A THOUGHT FOR THE JOURNEY</span>
+        <p lang="sa">विद्या ददाति विनयं विनयाद् याति पात्रताम्।<br/>पात्रत्वाद् धनमाप्नोति धनाद् धर्मं ततः सुखम्॥</p>
+        <small>Knowledge gives humility; humility leads to worthiness, and worthiness to prosperity and fulfilment.</small>
+      </div>
+    </div>}
+
+    {postBrandCoda && <div className="postBrandCoda" aria-hidden="true">
+      <div className="postBrandCodaCard">
+        <div className="codaEmblem">A<span>✦</span></div>
+        <span className="postBrandEyebrow">AUREN · THE STANDARD</span>
+        <h2>Clarity. Discipline. Progress.</h2>
+        <p>One chapter at a time. One deliberate step at a time.</p>
+        <div className="codaPillars"><span>01 <b>CLARITY</b></span><span>02 <b>DISCIPLINE</b></span><span>03 <b>PROGRESS</b></span></div>
+      </div>
+    </div>}
+
+    {focusMode && <div className="focusOverlay" role="dialog" aria-modal="true"><div className="focusAtmosphere"></div><button type="button" className="focusClose" onClick={() => { setFocusMode(false); setTimerRunning(false); }}><X size={19}/><span>Exit focus</span></button><div className="focusPanel"><div className="focusEyebrow"><span>AUREN FOCUS PROTOCOL</span><i>01</i></div><div className="focusOrb"><div className="focusOrbInner"><span>{timerMode === 'focus' ? 'DEEP WORK' : 'RESET'}</span><b>{timerLabel}</b><small>{timerRunning ? 'Stay with one task.' : 'Ready when you are.'}</small></div></div><div className="focusTask"><small>NEXT BEST ACTION</small><h2>{priorityPreview?.chapter || 'Choose one chapter to begin'}</h2><p>{priorityPreview ? `${priorityPreview.subject} · ${priorityPreview.task || 'Complete the next unfinished step'}` : 'Use the planner to create a focused route.'}</p></div><div className="focusControls"><button type="button" className="primary" onClick={() => setTimerRunning(v => !v)}>{timerRunning ? 'Pause session' : 'Resume focus'} <ChevronRight/></button><button type="button" className="secondaryButton" onClick={() => { setTimerMode('focus'); setTimerSeconds(25*60); setTimerRunning(true); }}>Restart 25 min</button><button type="button" className="focusTaskButton" onClick={() => { setFocusMode(false); go(priorityPreview ? 'study' : 'datesheet'); }}>Open study route <ArrowUpRight size={15}/></button></div><div className="focusFooter"><span>F = focus mode</span><span>ESC = exit</span><span>25 / 5 rhythm</span></div></div></div>}
 
     {viewer && <div className="viewerOverlay"><div className="viewer"><header><div><small>INTEGRATED RESOURCE</small><h2>{viewer.title}</h2><p>{viewer.description}</p></div><div className="viewerActions"><a href={viewer.url} target="_blank" rel="noreferrer"><ExternalLink size={16}/> Open</a><a href={viewer.url} target="_blank" rel="noreferrer"><Download size={16}/> Download</a><button type="button" onClick={() => setViewer(null)}><X/></button></div></header><iframe src={`/api/resource?url=${encodeURIComponent(viewer.url)}`} title={viewer.title} /></div></div>}
 
     {timerOpen && <div className="overlay"><div className="timerModal"><button type="button" className="closeX" onClick={() => setTimerOpen(false)}><X/></button><small>FOCUS TIMER</small><h2>{timerMode === 'focus' ? 'Deep work' : 'Short break'}</h2><div className="timerCircle"><b>{timerLabel}</b><span>{timerRunning ? 'FOCUSING' : 'READY'}</span></div><div className="timerModes"><button type="button" className={timerMode === 'focus' ? 'selected' : ''} onClick={() => switchTimerMode('focus')}>25 min focus</button><button type="button" className={timerMode === 'break' ? 'selected' : ''} onClick={() => switchTimerMode('break')}>5 min break</button></div><div className="timerActions"><button type="button" className="primary" onClick={() => setTimerRunning(!timerRunning)}>{timerRunning ? 'Pause' : 'Start'} <ChevronRight/></button><button type="button" className="secondaryButton" onClick={resetTimer}><TimerReset size={15}/> Reset</button></div></div></div>}
 
-    {loginOpen && <div className="overlay"><div className="welcome login"><button type="button" className="closeX" onClick={() => setLoginOpen(false)}><X/></button><User/><h2>AUREN ACCOUNT</h2><p>This local profile is already active as <b>{name || 'Student'}</b>.</p><div className="loginRow"><Lock size={16}/><span>Progress is stored in this browser.</span></div><button type="button" className="primary full" onClick={() => { setLoginOpen(false); notify('Profile is active'); }}>Continue</button><small>Cloud login can be connected later with Supabase/Firebase.</small></div></div>}
+    {loginOpen && <div className="overlay accountOverlay" onMouseDown={() => setLoginOpen(false)}><div className="accountHub" onMouseDown={e=>e.stopPropagation()}><button type="button" className="closeX" onClick={() => setLoginOpen(false)}><X/></button><div className="accountHubTop"><div className="accountOrb"><User size={22}/></div><div><small>AUREN · PRIVATE PROFILES</small><h2>Your accounts</h2><p>Switch profiles on this device or add another student.</p></div></div><div className="accountCurrent"><span className="accountAvatar">{(name.trim()[0] || 'A').toUpperCase()}</span><div><small>ACTIVE NOW</small><b>{name || 'Student'}</b><span>Class {className} · Local profile</span></div><span className="accountLive">LIVE</span></div><div className="accountList">{accounts.filter(a=>a.name.toLowerCase() !== name.trim().toLowerCase()).map(a=><button type="button" className="accountRow" key={a.id} onClick={()=>switchAccount(a)}><span className="accountMiniAvatar">{a.name[0].toUpperCase()}</span><span><b>{a.name}</b><small>Class {a.className}</small></span><ChevronRight/></button>)}{accounts.filter(a=>a.name.toLowerCase() !== name.trim().toLowerCase()).length===0 && <div className="accountEmpty"><Sparkles size={16}/><span>No other profiles yet.</span></div>}</div><div className="accountActions"><button type="button" className="accountAdd" onClick={addAccount}><Plus size={17}/><span><b>Add another account</b><small>Create a separate profile identity on this device.</small></span><ChevronRight/></button><button type="button" className="accountDelete" onClick={deleteCurrentAccount}><Trash2 size={16}/><span>Delete current account</span></button></div><div className="accountPremium"><span><Sparkles size={15}/></span><div><b>AUREN Premium experience</b><small>Private profiles · cinematic navigation · focus protocol · smart study tools</small></div></div><div className="accountFine">Profiles are stored locally on this device.</div></div></div>}
 
-    <button type="button" className="floatingProfile" onClick={() => setLoginOpen(true)} aria-label="Open profile"><User size={18}/></button>
     {paletteOpen && <div className="overlay paletteOverlay" onMouseDown={()=>setPaletteOpen(false)}><div className="palette commandCenter" onMouseDown={e=>e.stopPropagation()}><div className="commandCenterTop"><div><small>AUREN COMMAND DECK</small><h2>Where do you want to go?</h2><p>Choose a destination without leaving the page.</p></div><button type="button" className="closeX" onClick={()=>setPaletteOpen(false)}><X/></button></div><div className="paletteHead"><Search/><input autoFocus value={search} placeholder="Search your study space..." onChange={e=>setSearch(e.target.value)}/><kbd>ESC</kbd></div><div className="paletteList commandGridNav">{nav.filter(([id]) => String(id) !== 'ai').map(([id,label,Icon])=>({id,label,Icon,desc:`Open ${String(label).toLowerCase()}`})).concat([{id:'ai',label:'Auren Intelligence',Icon:Bot,desc:'Ask, learn and practise'}] as any).filter((x:any)=>String(x.label).toLowerCase().includes(search.toLowerCase())||String(x.desc).toLowerCase().includes(search.toLowerCase())).map((x:any)=>{ const PaletteIcon = x.Icon as React.ElementType; return <button type="button" className={`commandTile ${page === x.id ? 'active' : ''}`} key={String(x.id)} onClick={()=>quickAction(String(x.id))}><span className="commandTileIcon"><PaletteIcon/></span><span><b>{String(x.label)}</b><small>{String(x.desc)}</small></span><ChevronRight/></button>; })}</div><div className="commandCenterBottom"><span><Sparkles size={14}/> FUTURISTIC STUDY NAVIGATION</span><span><b>Ctrl + K</b> anytime</span></div></div></div>}
 
     {toast && <div className="toast">{toast}</div>}
