@@ -57,11 +57,11 @@ ${JSON.stringify(context)}`;
 
     const interaction = await ai.interactions.create({
       model: MODEL,
-      systemInstruction,
+      system_instruction: systemInstruction,
       input: prompt,
-      generation_Config: {
-        max_Output_Tokens: 900,
-        thinking_Level: 'low',
+      generation_config: {
+        max_output_tokens: 900,
+        thinking_level: 'low',
       },
     });
 
